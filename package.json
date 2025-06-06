@@ -2,6 +2,7 @@
     "name": "lmcanvas",
     "version": "1.0.0",
     "main": "main.js",
+    "type": "module",
     "scripts": {
         "electron:start": "electron .",
         "electron:build": "vite build && electron-builder",
@@ -12,22 +13,19 @@
         "start": "electron ."
     },
     "dependencies": {
+        "@fluentui/react-components": "^9.64.0",
         "asakjs": "^1.0.2",
-        "react": "^19.1.0",
-        "react-dom": "^19.1.0"
+        "react": "18.3.1",
+        "react-dom": "18.3.1"
     },
     "devDependencies": {
-        "@eslint/js": "^9.25.0",
-        "@types/react": "^19.1.2",
-        "@types/react-dom": "^19.1.2",
+        "@types/react": "^18.3.1",
+        "@types/react-dom": "^18.3.1",
         "@vitejs/plugin-react": "^4.4.1",
         "concurrently": "^8.2.2",
         "cross-env": "^7.0.3",
-        "electron": "^36.3.2",
+        "electron": "^36.4.0",
         "electron-builder": "^26.0.12",
-        "eslint": "^9.25.0",
-        "eslint-plugin-react-hooks": "^5.2.0",
-        "eslint-plugin-react-refresh": "^0.4.19",
         "globals": "^16.0.0",
         "vite": "^6.3.5",
         "wait-on": "^8.0.3"

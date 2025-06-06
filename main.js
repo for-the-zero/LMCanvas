@@ -1,21 +1,40 @@
-const isDev = true;
+import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
-import { app, BrowserWindow } from 'electron';
+const is_dev = !app.isPackaged;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
-function createWindow() {
-    const win = new BrowserWindow({
-        width: 1200,
-        height: 800,
+function main() {
+    const win_controller = new BrowserWindow({
+        width: 900,
+        height: 500,
+        center: true,
+        autoHideMenuBar: true,
+        show: false,
         webPreferences: {
             nodeIntegration: true,
-            contextIsolation: false,
-            devTools: isDev,
+            contextIsolation: true,
             webSecurity: false,
+            preload: join(__dirname, 'renderer', 'controller_preload.cjs')
         }
     });
-    isDev
-        ? win.loadURL('http://localhost:5173/renderer/controller.html')
-        : win.loadFile('../build/renderer/index.html');
+    win_controller.setMenu(null);
+    if(is_dev){
+        win_controller.loadURL('http://localhost:5173/renderer/controller.html');
+        win_controller.webContents.openDevTools();
+    } else {
+        win_controller.loadFile(join(__dirname, 'build', 'renderer', 'index.html'));
+    };
+    win_controller.once('ready-to-show', () => {
+        win_controller.show();
+    });
 };
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => { main() });
+app.on('window-all-closed', () => {
+    if (process.platform!== 'darwin') {
+        app.quit();
+    };
+});

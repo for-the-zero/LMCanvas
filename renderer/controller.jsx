@@ -1,12 +1,10 @@
 import React from 'react';
+import { Button } from '@fluentui/react-components';
 import './controller.css';
 
 function App() {
     return (
-        <div className="App">
-            <h1>Hello, React!</h1>
-            <p>Welcome to your new React app.</p>
-        </div>
+        <Button appearance="primary">Get started</Button>
     );
 }
 
