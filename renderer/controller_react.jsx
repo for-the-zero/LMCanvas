@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { StrictMode } from 'react';
 import ReactDOM from 'react-dom/client';
 import { FluentProvider, teamsLightTheme, teamsDarkTheme } from '@fluentui/react-components';
 import './controller.css';
@@ -15,10 +15,12 @@ try{
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
-    <FluentProvider
-        theme={fluent_theme}
-        style={{height: '100vh',width: '100vw'}}
-    >
-        <App />
-    </FluentProvider>
+    <StrictMode>
+        <FluentProvider
+            theme={fluent_theme}
+            style={{height: '100vh',width: '100vw'}}
+        >
+            <App />
+        </FluentProvider>
+    </StrictMode>
 );

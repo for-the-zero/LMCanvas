@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron';
+import { app, BrowserWindow, ipcMain, session } from 'electron';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
