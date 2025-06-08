@@ -16,7 +16,8 @@
         "@fluentui/react-components": "^9.64.0",
         "asakjs": "^1.0.2",
         "react": "18.3.1",
-        "react-dom": "18.3.1"
+        "react-dom": "18.3.1",
+        "react-markdown": "^10.1.0"
     },
     "devDependencies": {
         "@types/react": "^18.3.1",

@@ -3,14 +3,48 @@ import './controller.css';
 
 // components
 import { 
+    tokens,
     Button, Select, Label, Input, Radio, RadioGroup, Switch, InfoLabel,
-    Title1, Tooltip, Avatar, Divider
+    Title1, Tooltip, Avatar, Divider,
+    Card, CardHeader, CardPreview,
+    Body1, Body1Strong
 } from '@fluentui/react-components';
+import { Collapse } from '@fluentui/react-motion-components-preview';
 // icons
 import {
-    ArrowResetRegular,
-    SaveRegular
+    ArrowResetRegular, SaveRegular,
+    ChatMultipleMinusRegular, BotRegular, ThinkingRegular, CodeBlockRegular, ArrowCollapseAllRegular
 } from '@fluentui/react-icons';
+
+function CollapseCard({title, children}){
+    const [open, set_open] = React.useState(false);
+    return (
+        <Card appearance='outline'
+            selected={open} onSelectionChange={(e,{selected})=>{set_open(selected)}}
+            style={open? {backgroundColor: tokens.colorNeutralBackground3} : {}}
+        >
+            <CardHeader 
+                image={
+                    (title === 'Thoughts') ? <ThinkingRegular style={{fontSize: '20px'}} /> : 
+                    <CodeBlockRegular style={{fontSize: '20px'}} />
+                }
+                header={
+                    <Body1Strong>{title}</Body1Strong>
+                }
+            />
+            {/* <CardPreview className='msg-container' style={{overflow: 'scroll', maxHeight: '150px'}}>
+                <Collapse visible={open}>
+                    {children}
+                </Collapse>
+            </CardPreview> */}
+            <Collapse visible={open}>
+                <CardPreview className='msg-container' style={{overflow: 'scroll', maxHeight: '150px'}}>
+                    {children}
+                </CardPreview>
+            </Collapse>
+        </Card>
+    )
+};
 
 function App() {
     const [useasak, set_useasak] = React.useState(false);
@@ -91,7 +125,7 @@ function App() {
                     </div>
                     <div className='config-line' style={{display: asak_recordusefile ? 'none' : 'grid'}}>
                         <Label>Record JSON:</Label>
-                        <Input appearance='underline' disabled="true" value="Here's the record"></Input>
+                        <Input appearance='underline' disabled={true} value="Here's the record"></Input>
                     </div>
                 </div>
 
@@ -101,8 +135,41 @@ function App() {
                     <Button appearance='primary'>Send</Button>
                 </div>
             </div>
+
             <div className="right">
-                <Title1>Waiting for Developement</Title1>
+
+                <Card appearance='subtle'>
+                    <CardHeader 
+                        image={
+                            <ChatMultipleMinusRegular style={{fontSize: '20px'}} />
+                        }
+                        header={
+                            <Body1Strong>AI received message</Body1Strong>
+                        } />
+                    <CardPreview className='msg-container'>
+                        <Body1>Lorem ipsum dolor sit amet consectetur, adipisicing elit. Nisi, ipsam sequi minima optio in vel sed dicta blanditiis cumque ipsum quidem culpa totam commodi quasi odio aliquid a accusamus temporibus.<br /></Body1>
+                    </CardPreview>
+                </Card>
+
+                <Card>
+                    <CardHeader 
+                        image={
+                            <BotRegular style={{fontSize: '20px'}} />
+                        }
+                        header={
+                            <Body1Strong>Response</Body1Strong>
+                        }
+                    />
+                    <CardPreview className='msg-container'>
+                        <CollapseCard title='Thoughts'>
+                            <Body1>Lorem ipsum dolor sit amet consectetur adipisicing elit. Incidunt dolores corrupti neque numquam repellendus distinctio, pariatur unde id tempora natus! Praesentium fugiat totam vitae possimus placeat deleniti! Mollitia, sit id!Lorem Lorem ipsum, dolor sit amet consectetur adipisicing elit. Voluptates explicabo fugiat nobis culpa vel expedita deserunt, aspernatur magnam error at officia, dolor neque. Praesentium quae voluptatum voluptates totam. Velit, rerum.</Body1>
+                        </CollapseCard>
+                        <Body1>Lorem ipsum dolor sit amet consectetur, adipisicing elit. Eveniet ea corrupti quibusdam minus voluptatum sapiente ratione nemo assumenda quae? Minima natus qui quae iusto doloribus tempore non nam quia quo!<br /></Body1>
+                        <CollapseCard title='JavaScript'>
+                            <Body1>Lorem ipsum dolor sit amet consectetur adipisicing elit. Incidunt dolores corrupti neque numquam repellendus distinctio, pariatur unde id tempora natus! Praesentium fugiat totam vitae possimus placeat deleniti! Mollitia, sit id!</Body1>
+                        </CollapseCard>
+                    </CardPreview>
+                </Card>
             </div>
         </div>
     );
