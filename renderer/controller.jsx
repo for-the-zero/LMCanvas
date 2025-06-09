@@ -6,19 +6,22 @@ import {
     Button, Select, Label, Input, Radio, RadioGroup, Switch, InfoLabel,
     Title1, Tooltip, Text , Divider, Link,
     Card, CardHeader, CardPreview,
-    Body1, Body1Strong,
+    Body1, Body1Strong, Caption1,
     Dialog, DialogTrigger, DialogSurface, DialogTitle, DialogBody, DialogContent,
+    Caption1Strong,
+    useToastController, Toast, ToastTitle, Toaster, ToastBody
 } from '@fluentui/react-components';
 // icons
 import {
-    ArrowResetRegular, InfoRegular, Dismiss24Regular,
-    ChatMultipleMinusRegular, BotRegular
+    ArrowResetRegular, InfoRegular, Dismiss24Regular, WarningRegular
 } from '@fluentui/react-icons';
 // markdown
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+// ai
+import asak from 'asakjs';
 
 function CodeBlock({ node, inline, className, children, ...props }){
     const match = /(\w+):/.exec(className || '');
@@ -73,16 +76,29 @@ const MsgMD = React.memo(({children})=>{
 
 
 function App() {
+    const toastId = React.useId('toaster');
+    const { dispatchToast } = useToastController(toastId);
+
     const [useasak, set_useasak] = React.useState(false);
+    const [pmtlang, set_pmtlang] = React.useState('en');
     const [streaming, set_streaming] = React.useState(true);
     const [asak_configusefile, set_asak_configusefile] = React.useState(true);
     const [asak_recordusefile, set_asak_recordusefile] = React.useState(true);
+    const [jom_endpoint, set_jom_endpoint] = React.useState('');
+    const [jom_apikey, set_jom_apikey] = React.useState('');
+    const [jom_model, set_jom_model] = React.useState('');
+    const [asak_config, set_asak_config] = React.useState('');
+    const [asak_configvalid, set_asak_configvalid] = React.useState(false);
+    const [asak_record, set_asak_record] = React.useState({});
+    const [asak_recordfilepath, set_asak_recordfilepath] = React.useState('');
+    const [asak_core, set_asak] = React.useState(null);
 
 
     return (
         <div className="main">
             <div className="left">
 
+                {/* titlebar */}
                 <div className='title-bar'>
                     <Title1>LMCanvas</Title1>
                     <div style={{flexGrow: 1}}></div>
@@ -125,8 +141,9 @@ TODO - Add description here
                     </Dialog>
                 </div>
 
+                {/* model basic settings */}
                 <Label>System prompt language:</Label>
-                <RadioGroup layout="horizontal" defaultValue='en'>
+                <RadioGroup layout="horizontal" defaultValue='en' onChange={(e,data)=>{set_pmtlang(data.value);}}>
                     <Radio label='English' value='en'></Radio>
                     <Radio label='Chinese' value='zh'></Radio>
                 </RadioGroup>
@@ -137,21 +154,23 @@ TODO - Add description here
                     <option>asak</option>
                 </Select>
 
+                {/* jom settings */}
                 <div className='jom-configs' style={{display: useasak? 'none' : 'block'}}>
                     <div className='config-line'>
                         <InfoLabel info={'Without /chat/completions'} label='API Endpoint:'></InfoLabel>
-                        <Input appearance='outline' placeholder='e.g. https://generativelanguage.googleapis.com/v1beta/openai'></Input>
+                        <Input appearance='outline' placeholder='e.g. https://generativelanguage.googleapis.com/v1beta/openai' onChange={(e,data)=>{set_jom_endpoint(data.value);}}></Input>
                     </div>
                     <div className='config-line'>
                         <Label>API Key:</Label>
-                        <Input appearance='outline' type="password" placeholder='e.g. sk-NeverGonnaGiveYouUp'></Input>
+                        <Input appearance='outline' type="password" placeholder='e.g. sk-NeverGonnaGiveYouUp' onChange={(e,data)=>{set_jom_apikey(data.value);}}></Input>
                     </div>
                     <div className='config-line'>
                         <Label>Model:</Label>
-                        <Input appearance='outline' placeholder='e.g. gemini-2.5-pro-preview-06-05'></Input>
+                        <Input appearance='outline' placeholder='e.g. gemini-2.5-pro-preview-06-05' onChange={(e,data)=>{set_jom_model(data.value);}}></Input>
                     </div>
                 </div>
 
+                {/* asak settings */}
                 <div className='asak-configs' style={{display: useasak? 'block' : 'none'}}>
                     <div className='config-line'>
                         <Label>Config:</Label>
@@ -162,11 +181,63 @@ TODO - Add description here
                     </div>
                     <div className='config-line' style={{display: asak_configusefile ? 'grid' : 'none'}}>
                         <Label>Config File:</Label>
-                        <Button appearance='default'>Choose File</Button>
+                        <Button appearance='default' onClick={()=>{
+                            let file_ele = document.createElement('input');
+                            file_ele.type = 'file';
+                            file_ele.onchange = (e)=>{
+                                let file = e.target.files[0];
+                                let reader = new FileReader();
+                                reader.readAsText(file);
+                                reader.onload = (e)=>{
+                                    try{
+                                        let input_config = JSON.parse(e.target.result);
+                                        let test = new asak(input_config);
+                                        set_asak_config(input_config);
+                                        set_asak_configvalid(true);
+                                    }catch(e){
+                                        dispatchToast(
+                                            <Toast>
+                                                <ToastTitle>File Read Error</ToastTitle>
+                                                <ToastBody><Caption1>Config JSON is not valid or structure is not correct.<br />We will use the last valid json as config.</Caption1></ToastBody>
+                                            </Toast>, { intent: 'error' }
+                                        );
+                                    };
+                                };
+                                reader.onerror = (e)=>{
+                                    dispatchToast(
+                                        <Toast>
+                                            <ToastTitle>File Read Error</ToastTitle>
+                                        </Toast>, { intent: 'error' }
+                                    );
+                                };
+                            };
+                            file_ele.click();
+                        }}>Choose File</Button>
                     </div>
                     <div className='config-line' style={{display: asak_configusefile ? 'none' : 'grid'}}>
                         <Label>Config JSON:</Label>
-                        <Input appearance='underline' placeholder='Paste your config here'></Input>
+                        <Input appearance='underline' placeholder='Paste your config here'
+                            onChange={(e,data)=>{
+                                try{
+                                    let input_config = JSON.parse(data.value);
+                                    let test = new asak(input_config);
+                                    set_asak_config(input_config);
+                                    set_asak(test);
+                                    set_asak_record(asak_core.recorder.get());
+                                    set_asak_configvalid(true);
+                                }catch(e){
+                                    console.log(e);
+                                    set_asak_configvalid(false);
+                                };
+                            }}
+                            contentAfter={
+                                <Tooltip content={(
+                                    <Caption1>JSON format is incorrect or structure is not correct<br />We will use the last valid json as config.</Caption1>
+                                )} relationship='label'>
+                                    <WarningRegular style={{'display': asak_configvalid ? 'none' : 'inline-block'}} />
+                                </Tooltip>
+                            }
+                        ></Input>
                     </div>
                     <div className='config-line'>
                         <Label>Record:</Label>
@@ -177,14 +248,54 @@ TODO - Add description here
                     </div>
                     <div className='config-line' style={{display: asak_recordusefile ? 'grid' : 'none'}}>
                         <Label>Record File:</Label>
-                        <Button appearance='default'>Choose File</Button>
+                        <Button appearance='default' onClick={async()=>{
+                            console.log(window.electron_apis);
+                            if(asak_config){
+                                let file = await window.electron_apis.dialog.showOpenDialog({ //TODO: can't access
+                                    properties: ['openFile'],
+                                    filters: [{ name: 'JSON', extensions: ['json'] }]
+                                });
+                                if(file.filePaths.length > 0){
+                                    let filepath = file.filePaths[0];
+                                    set_asak_recordfilepath(filepath);
+                                    try{
+                                        let record = await window.electron_apis.fs.readFile(filepath, 'utf-8'); //TODO:
+                                        record = JSON.parse(record);
+                                        asak_core.recorder.add(record);
+                                        set_asak_record(asak_core.recorder.get());
+                                    } catch(e){
+                                        dispatchToast(
+                                            <Toast>
+                                                <ToastTitle>Not a record file</ToastTitle>
+                                                <ToastBody><Caption1>We will rewrite this file.</Caption1></ToastBody>
+                                            </Toast>, { intent: 'error' }
+                                        );
+                                    };
+                                } else {
+                                    dispatchToast(
+                                        <Toast>
+                                            <ToastTitle>No file selected</ToastTitle>
+                                        </Toast>, { intent: 'info' }
+                                    );
+                                };
+                            } else {
+                                dispatchToast(
+                                    <Toast>
+                                        <ToastTitle>Set your config first!</ToastTitle>
+                                    </Toast>, { intent: 'info' }
+                                );
+                                return;
+                            };
+                        }}>Choose File</Button>
                     </div>
                     <div className='config-line' style={{display: asak_recordusefile ? 'none' : 'grid'}}>
                         <Label>Record JSON:</Label>
-                        <Input appearance='underline' disabled={true} value="Here's the record"></Input>
+                        <Input appearance='underline' disabled={true} value={JSON.stringify(asak_record)}></Input>
                     </div>
                 </div>
+                <Toaster toasterId={toastId} />
 
+                {/* ask */}
                 <Divider />
                 <div className='ask'>
                     <Input appearance='outline' placeholder='Send message to AI' style={{width: '100%'}}></Input>
@@ -194,7 +305,9 @@ TODO - Add description here
 
             <div className="right">
                 <div className='chats'>
-
+                    
+                    {/* 
+                    // user message
                     <Card appearance='subtle'>
                         <CardHeader 
                             image={
@@ -204,10 +317,11 @@ TODO - Add description here
                                 <Body1Strong>AI received message</Body1Strong>
                             } />
                         <CardPreview className='msg-container'>
-                            <Body1>Lorem ipsum dolor sit amet consectetur, adipisicing elit. Nisi, ipsam sequi minima optio in vel sed dicta blanditiis cumque ipsum quidem culpa totam commodi quasi odio aliquid a accusamus temporibus.<br /></Body1>
+                            <Body1>{``}</Body1>
                         </CardPreview>
                     </Card>
-
+                    
+                    // ai response
                     <Card appearance='outline'>
                         <CardHeader 
                             image={
@@ -220,45 +334,12 @@ TODO - Add description here
                         <CardPreview className='msg-container'>
                             <Text>
                                 <MsgMD>
-                                    {`
-<think>
-
-段落 **粗体**、*斜体* 和 \`console.log()\` [链接](https://github.com)
-
-</think>
-
-# 主标题 H1
-
-## 副标题 H2
-
-114514
-
-1. 列表1
-2. 列表2
-3. 列表3
-
-- 1
-    - 1.1
-    - 1.2
-- 2
-
-\> 引用
-
-\`\`\`javascript:run
-console.log('Hello, world!');
-\`\`\`
-
-\`\`\`json:call
-{"a": "b", "c": 114514}
-\`\`\`
-
----
-
-                                    `}
+                                    {``}
                                 </MsgMD>
                             </Text>
                         </CardPreview>
-                    </Card>
+                    </Card> 
+                    */}
 
                 </div>
             </div>
