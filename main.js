@@ -1,10 +1,33 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import fs from 'fs';
 
 const is_dev = !app.isPackaged;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+ipcMain.handle('get_record_file', async (e) => {
+    let path = '';
+    let filecontent = '';
+    let result = await dialog.showOpenDialog({
+        properties: ['openFile'],
+        filters: [
+            { name: 'JSON Record File', extensions: ['json'] }
+        ]
+    });
+    if (!result.canceled) {
+        path = result.filePaths[0];
+        try{
+            filecontent = await fs.promises.readFile(path, 'utf-8');
+        } catch(err){
+            return {content: '', path: '', error: err.message};
+        };
+    } else {
+        return {content: '', path: '', error: 'Canceled'};
+    };
+    return {content: filecontent, path, error: false};
+});
 
 function main() {
     const win_controller = new BrowserWindow({

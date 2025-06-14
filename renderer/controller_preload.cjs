@@ -1,4 +1,4 @@
-const { ipcRenderer, nativeTheme, contextBridge, dialog } = require('electron');
+const { ipcRenderer, nativeTheme, contextBridge, shell } = require('electron');
 const fs = require('fs/promises');
 
 contextBridge.exposeInMainWorld('electron_apis', {
@@ -11,10 +11,12 @@ contextBridge.exposeInMainWorld('electron_apis', {
         shouldUseDarkColors: () => nativeTheme.shouldUseDarkColors
     },
     fs: {
-        fs_writeFile: (path, data, encoding) => fs.writeFile(path, data, encoding),
-        fs_readFile: (path, encoding) => fs.readFile(path, encoding),
+        writeFile: (path, data) => fs.writeFile(path, data, 'utf-8'),
     },
-    dialog: {
-        showOpenDialog: (options) => dialog.showOpenDialog(options)
+    packed_functions: {
+        get_record_file: () => ipcRenderer.invoke('get_record_file'),
+    },
+    shell: {
+        openExternal: (url) => shell.openExternal(url)
     }
 });
