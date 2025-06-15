@@ -17,23 +17,33 @@ import {
 } from '@fluentui/react-icons';
 // markdown
 import ReactMarkdown from 'react-markdown';
-import rehypeRaw from 'rehype-raw';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 // ai
 import asak from 'asakjs';
+import {OpenAI} from 'openai';
 
 function CodeBlock({ node, inline, className, children, ...props }){
     const match = /(\w+):/.exec(className || '');
     
-    return !inline && match ? (
-        <SyntaxHighlighter
-            style={vscDarkPlus}
-            language={match[1]}
-            {...props}
-        >
-            {String(children).replace(/\n$/, '')}
-        </SyntaxHighlighter>
+    return !inline ? (
+        match?(
+            <SyntaxHighlighter
+                style={vscDarkPlus}
+                language={match[1]}
+                {...props}
+            >
+                {String(children).replace(/\n$/, '')}
+            </SyntaxHighlighter>
+        ):(
+            <SyntaxHighlighter
+                style={vscDarkPlus}
+                language='text'
+                {...props}
+            >
+                {String(children).replace(/\n$/, '')}
+            </SyntaxHighlighter>
+        )
     ) : (
         <code {...props} style={{'padding': '1px','borderRadius': '3px', 'border': '1.5px solid gray'}}>
             {children}
@@ -66,7 +76,6 @@ const markdown_cpnts = {
 const MsgMD = React.memo(({children})=>{
     return (
         <ReactMarkdown
-            rehypePlugins={[rehypeRaw]}
             components={markdown_cpnts}
         >
             {children}
@@ -167,7 +176,6 @@ function App() {
     const [pmtlang, set_pmtlang] = React.useState('en');
     const [streaming, set_streaming] = React.useState(true);
     const [scrolling, set_scrolling] = React.useState(true);
-    const [supplement, set_supplement] = React.useState('');
     const [asak_configusefile, set_asak_configusefile] = React.useState(true);
     const [asak_recordusefile, set_asak_recordusefile] = React.useState(true);
     const [jom_endpoint, set_jom_endpoint] = React.useState('');
@@ -177,9 +185,10 @@ function App() {
     const [asak_configvalid, set_asak_configvalid] = React.useState(false);
     const [asak_record, set_asak_record] = React.useState({});
     const [asak_recordfilepath, set_asak_recordfilepath] = React.useState('');
+    const [asak_mode, set_asak_mode] = React.useState('index');
     const [asak_ai, set_asak] = React.useState(null);
     const [send2ai, set_send2ai] = React.useState('');
-    const [chat_history, set_messages] = React.useState([{role: 'system', content: ''}]);
+    const [chat_history, set_chathistory] = React.useState([{role: 'system', content: pmtlang === 'en' ? syspmt['en'] : syspmt['zh']}]);
     const [generating , set_generating] = React.useState(false);
 
     React.useEffect(() => {
@@ -192,6 +201,95 @@ function App() {
         };
     }, [chat_history, scrolling]);
 
+    async function request_ai(){
+        let cfg = {
+            base_url: '',
+            key: '',
+            model: '',
+        };
+        if(useasak){
+            if(asak_configvalid){
+                set_generating(true);
+                let res = asak_ai.get_model(mode=asak_mode);
+                cfg = {
+                    base_url: res.base_url,
+                    key: res.key,
+                    model: res.model,
+                };
+            } else {
+                dispatchToast(<Toast>
+                    <ToastTitle>Error</ToastTitle>
+                    <ToastBody><Caption1>Please provide valid asak config</Caption1></ToastBody>
+                </Toast>, {appearance: 'error'});
+                return;
+            };
+        } else {
+            if(jom_endpoint !== '' && jom_apikey !== '' && jom_model !== ''){
+                set_generating(true);
+                cfg = {
+                    base_url: jom_endpoint + '/chat/',
+                    key: jom_apikey,
+                    model: jom_model,
+                };
+            } else {
+                dispatchToast(<Toast>
+                    <ToastTitle>Error</ToastTitle>
+                    <ToastBody><Caption1>Please provide valid config</Caption1></ToastBody>
+                </Toast>, {appearance: 'error'});
+                return;
+            };
+        };
+        let openai_cilent = new OpenAI({
+            apiKey: cfg.key,
+            baseURL: cfg.base_url,
+            dangerouslyAllowBrowser: true,
+        });
+        if(streaming){
+            let new_msg = {role: 'assistant', content: ''};
+            set_chathistory(prev => [...prev, new_msg]);
+            try{
+                let res = await openai_cilent.completions.create({
+                    model: cfg.model,
+                    messages: chat_history,
+                    stream: true
+                });
+                for await (let part of res){
+                    let ctt = part.choices[0]?.delta;
+                    if(ctt){
+                        if(ctt.reasoning || ctt.reasoning_content){
+                            const reasoning = ctt.reasoning || ctt.reasoning_content;
+                            if (!new_msg.content.startsWith('<think>')) {
+                                new_msg.content += '<think>\n';
+                            };
+                            new_msg.content += reasoning;
+                        } else if (ctt.content) {
+                            if (new_msg.content.startsWith('<think>') && !new_msg.content.endsWith('</think>')) {
+                                new_msg.content += '</think>\n';
+                            };
+                            new_msg.content += ctt.content;
+                        };
+                        set_chathistory(prev=>{
+                            let new_history = [...prev];
+                            let last_index = new_history.length - 1;
+                            new_history[last_index] = new_msg;
+                            return new_history;
+                        });
+                    };
+                };
+            } catch(e){
+                dispatchToast(<Toast>
+                    <ToastTitle>Error</ToastTitle>
+                    <ToastBody><Caption1>{e.message}</Caption1></ToastBody>
+                </Toast>, {appearance: 'error'});
+                set_generating(false);
+            };
+            console.log(new_msg.content);
+        } else {
+            //TODO:
+        };
+        set_generating(false);
+    };
+
 
     return (
         <div className="main">
@@ -203,16 +301,12 @@ function App() {
                     <div style={{flexGrow: 1}}></div>
                     <Tooltip content={'Reset'} relationship='label'>
                         <Button appearance="subtle" icon={<ArrowResetRegular />} onClick={()=>{
-                            set_supplement('');
-                            set_jom_endpoint('');
-                            set_jom_apikey('');
-                            set_jom_model('');
                             set_asak_config('');
                             set_asak_configvalid(false);
                             set_asak_record({});
                             set_asak_recordfilepath('');
                             set_asak(null);
-                            set_messages([{role: 'system', content: ''}]);
+                            set_chathistory([{role: 'system', content: pmtlang === 'en' ? syspmt['en'] : syspmt['zh']}]);
                             set_generating(false);
                         }} />
                     </Tooltip>
@@ -264,7 +358,7 @@ TODO - Add something here
                     } else {
                         old_history[0].content = syspmt['en'];
                     };
-                    set_messages(old_history);
+                    set_chathistory(old_history);
                 }}>
                     <Radio label='English' value='en'></Radio>
                     <Radio label='Chinese' value='zh'></Radio>
@@ -273,8 +367,6 @@ TODO - Add something here
                     <Switch label='Streaming Output' checked={streaming} onChange={()=>set_streaming(!streaming)} />
                     <Switch label='Auto Scroll' checked={scrolling} onChange={()=>set_scrolling(!scrolling)} />
                 </div>
-                <Label>Supplementary information for AI:</Label>
-                <Textarea resize="vertical" size="small" placeholder='you can add any additional information here, such as api key, cdn, lib, style, etc.' onChange={(e,data)=>{set_supplement(data.value);}} value={supplement}></Textarea>
                 <Label>Mode</Label>
                 <Select defaultValue='Just one model' onChange={(e,data)=>{set_useasak(data.value === 'asak' ? true : false)}}>
                     <option>Just one model</option>
@@ -428,6 +520,16 @@ TODO - Add something here
                         <Label>Record JSON:</Label>
                         <Input appearance='underline' disabled={true} value={JSON.stringify(asak_record)}></Input>
                     </div>
+                    <div className='config-line'>
+                        <Label>Mode:</Label>
+                        <Select defaultValue='index' onChange={(e,data)=>{
+                            set_asak_mode(data.value);
+                        }}>
+                            <option>index</option>
+                            <option>available</option>
+                            <option>random</option>
+                        </Select>
+                    </div>
                 </div>
                 <Toaster toasterId={toastId} />
 
@@ -436,10 +538,11 @@ TODO - Add something here
                 <div className='ask'>
                     <Input appearance='outline' placeholder='Send message to AI' style={{width: '100%'}} onChange={(e, data)=>{set_send2ai(data.value);}}></Input>
                     <Button appearance='primary' disabled={generating} onClick={()=>{
-                        set_messages([...chat_history, {
+                        set_chathistory([...chat_history, {
                             role: 'user',
                             content: send2ai,
                         }]);
+                        request_ai();
                     }}>Send</Button>
                 </div>
             </div>
