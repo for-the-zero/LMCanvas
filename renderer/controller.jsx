@@ -13,48 +13,57 @@ import {
 // icons
 import {
     ArrowResetRegular, InfoRegular, Dismiss24Regular, WarningRegular,
-    ChatMultipleMinusRegular, BotRegular, CopyRegular
+    ChatMultipleMinusRegular, BotRegular, CopyRegular, ThinkingRegular
 } from '@fluentui/react-icons';
 // markdown
 import ReactMarkdown from 'react-markdown';
-import remarkHtml from 'remark-html';
+import hljs from 'highlight.js';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 // ai
 import asak from 'asakjs';
 import {OpenAI} from 'openai';
 
-function CodeBlock({ node, inline, className, children, ...props }){
-    const match = /(\w+):/.exec(className || '');
-    return !inline ? (
-        match?(
+function CodeBlock({ node, inline, className, children, ...props }) {
+    let isBlock = String(children).includes('\n');
+    let hasLanguageClass = className?.startsWith('language-');
+    if (isBlock || hasLanguageClass) {
+        let match = /language-([\w:]+)/.exec(className || '');
+        let language = match ? match[1] : 'plaintext';
+        if (language === 'js:run') {
+            language = 'javascript';
+        } else if (language === 'plaintext') {
+            let codeContent = String(children).replace(/\n$/, '');
+            let detected = hljs.highlightAuto(codeContent);
+            language = detected.language || 'plaintext';
+        };
+        return (
             <SyntaxHighlighter
                 style={vscDarkPlus}
-                language={match[1]}
+                language={language}
                 {...props}
             >
                 {String(children).replace(/\n$/, '')}
             </SyntaxHighlighter>
-        ):(
-            <SyntaxHighlighter
-                style={vscDarkPlus}
-                language='text'
+        );
+    } else {
+        return (
+            <code
                 {...props}
+                className={className}
+                style={{'padding': '1px','borderRadius': '3px', 'border': '1.5px solid gray'}}
             >
-                {String(children).replace(/\n$/, '')}
-            </SyntaxHighlighter>
-        )
-    ) : (
-        <code {...props} style={{'padding': '1px','borderRadius': '3px', 'border': '1.5px solid gray'}}>
-            {children}
-        </code>
-    );
+                {children}
+            </code>
+        );
+    };
 };
 const ThinkingBlock = ({ children }) => {
     return (
         <Card appearance='outline' size='small'>
             <CardHeader
                 header={<Body1Strong>Thoughts:</Body1Strong>}
+                image={<ThinkingRegular style={{fontSize: '18px'}} />}
             />
             <CardPreview style={{padding: '8px', paddingTop: '0'}}>
                 {children}
@@ -71,24 +80,60 @@ const markdown_cpnts = {
     hr: () => <Divider />,
     a: ({ children, href }) => (<Link onClick={()=>{window.electron_apis.shell.openExternal(href)}}>{children}</Link>),
     code: CodeBlock,
-    think: ({ children }) => (<ThinkingBlock>{children}</ThinkingBlock>),
 };
-const MsgMD = React.memo(({children})=>{
+const MsgMD = React.memo(({ children }) => {
+    let content = String(children || '');
+    let segments = [];
+    let currentIndex = 0;
+    while (currentIndex < content.length) {
+        let thinkStartIndex = content.indexOf('<think>', currentIndex);
+        if (thinkStartIndex === -1) {
+            segments.push({ type: 'normal', content: content.substring(currentIndex) });
+            break;
+        };
+        if (thinkStartIndex > currentIndex) {
+            segments.push({ type: 'normal', content: content.substring(currentIndex, thinkStartIndex) });
+        };
+        let thinkEndIndex = content.indexOf('</think>', thinkStartIndex + 7);
+        if (thinkEndIndex !== -1) {
+            let thinkContent = content.substring(thinkStartIndex + 7, thinkEndIndex);
+            segments.push({ type: 'think', content: thinkContent });
+            currentIndex = thinkEndIndex + 8;
+        } else {
+            let thinkContent = content.substring(thinkStartIndex + 7);
+            segments.push({ type: 'think', content: thinkContent });
+            break;
+        };
+    };
     return (
-        <ReactMarkdown
-            components={markdown_cpnts}
-            //allowElement={['think']} //TODO: 后面解决
-            remarkPlugins={[remarkHtml]}
-        >
-            {children}
-        </ReactMarkdown>
-    )
+        <>
+            {segments.map((segment, index) => {
+                if (!segment.content) {
+                    return null;
+                };
+                if (segment.type === 'think') {
+                    return (
+                        <ThinkingBlock key={index}>
+                            <ReactMarkdown components={markdown_cpnts}>
+                                {segment.content}
+                            </ReactMarkdown>
+                        </ThinkingBlock>
+                    );
+                } else {
+                    return (
+                        <ReactMarkdown key={index} components={markdown_cpnts}>
+                            {segment.content}
+                        </ReactMarkdown>
+                    );
+                };
+            })}
+        </>
+    );
 });
 
 // prompt codes: here -> line 158
 // 说实话，效果怎么样全靠模型行不行，觉得生成得烂还是换模型吧
-//const syspmt = {
-var syspmt = { //TODO: 测试，后面移除
+const syspmt = {
     'en': `# Role and Goal
 
 You are a top-tier full-stack developer and a talented UI designer. Your core expertise is in front-end development using vanilla HTML, CSS, and JavaScript, and you are capable of leveraging specific Node.js and Electron APIs to build desktop application features. Your task is to output a brief implementation plan and executable JS code (only in \`js:run\` blocks) based on user requests, to create and modify a dynamic front-end page that is both **functional and aesthetically pleasing**.
@@ -168,7 +213,6 @@ To generate high-quality code, you can "conceive first, then code." Before writi
 2.  **界面语言**: 根据用户提出需求时所用的语言，来设定UI中的文本语言。若用户使用中文，则界面应使用中文`,
     // 889 tokens for Gemini 2.5 Pro Preview
 };
-syspmt = {'en': 'you are a helpful assistant', 'zh': 'you are a helpful assistant'}; //TODO: 测试，后面移除
 
 
 function App() {
@@ -193,7 +237,7 @@ function App() {
     const [asak_mode, set_asak_mode] = React.useState('index');
     const [asak_ai, set_asak] = React.useState(null);
     const [send2ai, set_send2ai] = React.useState('');
-    const [chat_history, set_chathistory] = React.useState([{role: 'system', content: syspmt_generator('en', '')}]);
+    const [chat_history, set_chathistory] = React.useState([{role: 'system', content: syspmt_generator(pmtlang, '')}]);
     const [generating , set_generating] = React.useState(false);
 
     React.useEffect(() => {
@@ -206,23 +250,20 @@ function App() {
         };
     }, [chat_history, scrolling]);
 
-    function syspmt_generator(f_lang, f_supplement){ //TODO: 有bug，更改后会调用三次且后面两次总是传入'en'
-        let the_lang = f_lang ? f_lang : pmtlang;
-        let the_spm = f_supplement ? f_supplement : supplement;
-        let pmt = syspmt[the_lang];
-        if(the_spm){
-            if(the_lang === 'en'){
-                pmt += `\nSupplement from user: \n${the_spm}`;
+    function syspmt_generator(f_lang, f_supplement){
+        //似乎有bug，不知道在哪，更改任意一个值都会触发三次且后面两次不带supplement，但是对程序好像没影响
+        let pmt = syspmt[f_lang];
+        if(f_supplement){
+            if(f_lang === 'en'){
+                pmt += `\nSupplement from user: \n${f_supplement}`;
             } else {
-                pmt += `\n用户提供的补充信息: \n${the_spm}`;
+                pmt += `\n用户提供的补充信息: \n${f_supplement}`;
             };
         };
-        console.log(pmt);
         return pmt;
     };
 
-    async function request_ai(){
-        //TODO: 刷新chathistory为最新值
+    async function request_ai(received_message){
         let cfg = {
             base_url: '',
             key: '',
@@ -265,13 +306,16 @@ function App() {
             baseURL: cfg.base_url,
             dangerouslyAllowBrowser: true,
         });
+        let new_chathistory = [...chat_history];
+        new_chathistory.push({role: 'user', content: received_message});
+        set_chathistory(new_chathistory);
         if(streaming){
             let new_msg = {role: 'assistant', content: ''};
             set_chathistory(prev => [...prev, new_msg]);
             try{
                 let res = await openai_cilent.completions.create({
                     model: cfg.model,
-                    messages: chat_history,
+                    messages: new_chathistory,
                     stream: true
                 });
                 for await (let part of res){
@@ -311,7 +355,7 @@ function App() {
             try{
                 let res = await openai_cilent.completions.create({
                     model: cfg.model,
-                    messages: chat_history,
+                    messages: new_chathistory,
                     stream: false
                 });
                 let msg = res.choices[0]?.message;
@@ -415,15 +459,15 @@ TODO - Add something here
                     <Switch label='Auto Scroll' checked={scrolling} onChange={()=>set_scrolling(!scrolling)} />
                 </div>
                 <Label>Supplementary information for AI:</Label>
-                <Textarea resize="vertical" size="small" placeholder='you can add any additional information here, such as api key, cdn, lib, style, etc.' onChange={(e,data)=>{
+                <Textarea resize="vertical" size="small" placeholder='You can add any additional information here, such as api key, cdn, lib, style, etc.' onChange={(e,data)=>{
                     set_supplement(data.value);
                     let old_history = JSON.parse(JSON.stringify(chat_history));
                     if(old_history.length === 0){
                         old_history.push({role: 'system', content: ''});
                     };
-                    old_history[0].content = syspmt_generator('', data.value);
+                    old_history[0].content = syspmt_generator(pmtlang, data.value);
                     set_chathistory(old_history);
-                }} value={supplement}></Textarea>
+                }}></Textarea>
                 <Label>Mode</Label>
                 <Select defaultValue='Just one model' onChange={(e,data)=>{set_useasak(data.value === 'asak' ? true : false)}}>
                     <option>Just one model</option>
@@ -442,7 +486,7 @@ TODO - Add something here
                     </div>
                     <div className='config-line'>
                         <Label>Model:</Label>
-                        <Input appearance='outline' placeholder='e.g. gemini-2.5-pro-preview-06-05' onChange={(e,data)=>{set_jom_model(data.value);}}></Input>
+                        <Input appearance='outline' placeholder='e.g. gemini-2.5-pro' onChange={(e,data)=>{set_jom_model(data.value);}}></Input>
                     </div>
                 </div>
 
@@ -589,12 +633,8 @@ TODO - Add something here
                 <Divider />
                 <div className='ask'>
                     <Input appearance='outline' placeholder='Send message to AI' style={{width: '100%'}} onChange={(e, data)=>{set_send2ai(data.value);}}></Input>
-                    <Button appearance='primary' disabled={generating} onClick={()=>{
-                        set_chathistory([...chat_history, {
-                            role: 'user',
-                            content: send2ai,
-                        }]);
-                        request_ai();
+                    <Button appearance='primary' disabled={generating || send2ai === ''} onClick={()=>{
+                        request_ai(send2ai);
                     }}>Send</Button>
                 </div>
             </div>

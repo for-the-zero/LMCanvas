@@ -116,8 +116,3 @@ pre{
     word-break: break-word;
     overflow-wrap: break-word;
 }
-
-.msg-container pre{
-    white-space: pre;
-    overflow-x: auto;
-}
