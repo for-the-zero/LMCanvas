@@ -13,10 +13,11 @@ import {
 // icons
 import {
     ArrowResetRegular, InfoRegular, Dismiss24Regular, WarningRegular,
-    ChatMultipleMinusRegular, BotRegular
+    ChatMultipleMinusRegular, BotRegular, CopyRegular
 } from '@fluentui/react-icons';
 // markdown
 import ReactMarkdown from 'react-markdown';
+import remarkHtml from 'remark-html';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 // ai
@@ -25,7 +26,6 @@ import {OpenAI} from 'openai';
 
 function CodeBlock({ node, inline, className, children, ...props }){
     const match = /(\w+):/.exec(className || '');
-    
     return !inline ? (
         match?(
             <SyntaxHighlighter
@@ -77,6 +77,8 @@ const MsgMD = React.memo(({children})=>{
     return (
         <ReactMarkdown
             components={markdown_cpnts}
+            //allowElement={['think']} //TODO: 后面解决
+            remarkPlugins={[remarkHtml]}
         >
             {children}
         </ReactMarkdown>
@@ -85,7 +87,8 @@ const MsgMD = React.memo(({children})=>{
 
 // prompt codes: here -> line 158
 // 说实话，效果怎么样全靠模型行不行，觉得生成得烂还是换模型吧
-const syspmt = {
+//const syspmt = {
+var syspmt = { //TODO: 测试，后面移除
     'en': `# Role and Goal
 
 You are a top-tier full-stack developer and a talented UI designer. Your core expertise is in front-end development using vanilla HTML, CSS, and JavaScript, and you are capable of leveraging specific Node.js and Electron APIs to build desktop application features. Your task is to output a brief implementation plan and executable JS code (only in \`js:run\` blocks) based on user requests, to create and modify a dynamic front-end page that is both **functional and aesthetically pleasing**.
@@ -100,7 +103,7 @@ You are a top-tier full-stack developer and a talented UI designer. Your core ex
 6.  **Available APIs**:
     * You can use all standard **Web APIs**.
     * You can use the **Node.js** \`fs\` (file system) and \`path\` modules, accessible via \`window.electronAPI.fs\` and \`window.electronAPI.path\`.
-    * You can access a specific set of **Electron APIs** through the \`window.electronAPI\` object, including \`dialog\`, \`clipboard\`, \`fetch\` (for cross-origin requests), and \`shell\`.
+    * You can access a specific set of **Electron APIs** through the \`window.electronAPI\` object, including \`clipboard\`, \`fetch\` (for cross-origin requests), and \`shell\`.
     * You may use a small number of Node.js built-in libraries, as long as you can ensure they are usable within an Electron renderer process.
 7.  **Regarding React**: You may choose to use React based on the requirements. However, you are responsible for handling the library's import and setting up the rendering entry point yourself.
 
@@ -139,7 +142,7 @@ To generate high-quality code, you can "conceive first, then code." Before writi
 6.  **可用API**:
     * 你可以使用所有标准的**Web API**
     * 你可以使用**Node.js**的\`fs\` (文件系统) 和 \`path\` (路径) 模块，通过\`window.electronAPI.fs\`和\`window.electronAPI.path\`进行访问
-    * 你可以通过\`window.electronAPI\`对象访问一组特定的**Electron API**，包括\`dialog\`, \`clipboard\`, \`fetch\` (用于跨域请求), 和\`shell\`
+    * 你可以通过\`window.electronAPI\`对象访问一组特定的**Electron API**，包括\`clipboard\`, \`fetch\` (用于跨域请求), 和\`shell\`
     * 你可以使用少量node内置库，只要能够确保它可以在electron渲染进程中使用即可
 7.  **关于React**: 你可以根据实际情况选择使用React。但你需要自行处理库的引入和渲染入口的设置
 
@@ -165,6 +168,7 @@ To generate high-quality code, you can "conceive first, then code." Before writi
 2.  **界面语言**: 根据用户提出需求时所用的语言，来设定UI中的文本语言。若用户使用中文，则界面应使用中文`,
     // 889 tokens for Gemini 2.5 Pro Preview
 };
+syspmt = {'en': 'you are a helpful assistant', 'zh': 'you are a helpful assistant'}; //TODO: 测试，后面移除
 
 
 function App() {
@@ -176,6 +180,7 @@ function App() {
     const [pmtlang, set_pmtlang] = React.useState('en');
     const [streaming, set_streaming] = React.useState(true);
     const [scrolling, set_scrolling] = React.useState(true);
+    const [supplement, set_supplement] = React.useState('');
     const [asak_configusefile, set_asak_configusefile] = React.useState(true);
     const [asak_recordusefile, set_asak_recordusefile] = React.useState(true);
     const [jom_endpoint, set_jom_endpoint] = React.useState('');
@@ -188,7 +193,7 @@ function App() {
     const [asak_mode, set_asak_mode] = React.useState('index');
     const [asak_ai, set_asak] = React.useState(null);
     const [send2ai, set_send2ai] = React.useState('');
-    const [chat_history, set_chathistory] = React.useState([{role: 'system', content: pmtlang === 'en' ? syspmt['en'] : syspmt['zh']}]);
+    const [chat_history, set_chathistory] = React.useState([{role: 'system', content: syspmt_generator('en', '')}]);
     const [generating , set_generating] = React.useState(false);
 
     React.useEffect(() => {
@@ -201,7 +206,23 @@ function App() {
         };
     }, [chat_history, scrolling]);
 
+    function syspmt_generator(f_lang, f_supplement){ //TODO: 有bug，更改后会调用三次且后面两次总是传入'en'
+        let the_lang = f_lang ? f_lang : pmtlang;
+        let the_spm = f_supplement ? f_supplement : supplement;
+        let pmt = syspmt[the_lang];
+        if(the_spm){
+            if(the_lang === 'en'){
+                pmt += `\nSupplement from user: \n${the_spm}`;
+            } else {
+                pmt += `\n用户提供的补充信息: \n${the_spm}`;
+            };
+        };
+        console.log(pmt);
+        return pmt;
+    };
+
     async function request_ai(){
+        //TODO: 刷新chathistory为最新值
         let cfg = {
             base_url: '',
             key: '',
@@ -254,19 +275,19 @@ function App() {
                     stream: true
                 });
                 for await (let part of res){
-                    let ctt = part.choices[0]?.delta;
-                    if(ctt){
-                        if(ctt.reasoning || ctt.reasoning_content){
-                            const reasoning = ctt.reasoning || ctt.reasoning_content;
+                    let delta = part.choices[0]?.delta;
+                    if(delta){
+                        if(delta.reasoning || delta.reasoning_content){
+                            const reasoning = delta.reasoning || delta.reasoning_content;
                             if (!new_msg.content.startsWith('<think>')) {
                                 new_msg.content += '<think>\n';
                             };
                             new_msg.content += reasoning;
-                        } else if (ctt.content) {
-                            if (new_msg.content.startsWith('<think>') && !new_msg.content.endsWith('</think>')) {
-                                new_msg.content += '</think>\n';
+                        } else if (delta.content) {
+                            if (new_msg.content.startsWith('<think>') && !new_msg.content.includes('</think>')) {
+                                new_msg.content += '\n</think>\n';
                             };
-                            new_msg.content += ctt.content;
+                            new_msg.content += delta.content;
                         };
                         set_chathistory(prev=>{
                             let new_history = [...prev];
@@ -285,7 +306,37 @@ function App() {
             };
             console.log(new_msg.content);
         } else {
-            //TODO:
+            let new_msg = {role: 'assistant', content: ''};
+            set_chathistory(prev => [...prev, new_msg]);
+            try{
+                let res = await openai_cilent.completions.create({
+                    model: cfg.model,
+                    messages: chat_history,
+                    stream: false
+                });
+                let msg = res.choices[0]?.message;
+                if(msg){
+                    if(msg.reasoning || msg.reasoning_content){
+                        let reasoning = msg.reasoning || msg.reasoning_content;
+                        new_msg.content = `<think>\n${reasoning}\n</think>\n`;
+                    };
+                    if(msg.content){
+                        new_msg.content += msg.content;
+                    };
+                };
+                set_chathistory(prev => {
+                    let new_history = [...prev];
+                    let last_index = new_history.length - 1;
+                    new_history[last_index] = new_msg;
+                    return new_history;
+                });
+            }catch(e){
+                dispatchToast(<Toast>
+                    <ToastTitle>Error</ToastTitle>
+                    <ToastBody><Caption1>{e.message}</Caption1></ToastBody>
+                </Toast>, {appearance: 'error'});
+                set_generating(false);
+            };
         };
         set_generating(false);
     };
@@ -306,7 +357,7 @@ function App() {
                             set_asak_record({});
                             set_asak_recordfilepath('');
                             set_asak(null);
-                            set_chathistory([{role: 'system', content: pmtlang === 'en' ? syspmt['en'] : syspmt['zh']}]);
+                            set_chathistory([{role: 'system', content: syspmt_generator('', supplement)}]);
                             set_generating(false);
                         }} />
                     </Tooltip>
@@ -353,11 +404,7 @@ TODO - Add something here
                     if(old_history.length === 0){
                         old_history.push({role: 'system', content: ''});
                     };
-                    if(data.value === 'zh'){
-                        old_history[0].content = syspmt['zh'];
-                    } else {
-                        old_history[0].content = syspmt['en'];
-                    };
+                    old_history[0].content = syspmt_generator(data.value, supplement);
                     set_chathistory(old_history);
                 }}>
                     <Radio label='English' value='en'></Radio>
@@ -367,6 +414,16 @@ TODO - Add something here
                     <Switch label='Streaming Output' checked={streaming} onChange={()=>set_streaming(!streaming)} />
                     <Switch label='Auto Scroll' checked={scrolling} onChange={()=>set_scrolling(!scrolling)} />
                 </div>
+                <Label>Supplementary information for AI:</Label>
+                <Textarea resize="vertical" size="small" placeholder='you can add any additional information here, such as api key, cdn, lib, style, etc.' onChange={(e,data)=>{
+                    set_supplement(data.value);
+                    let old_history = JSON.parse(JSON.stringify(chat_history));
+                    if(old_history.length === 0){
+                        old_history.push({role: 'system', content: ''});
+                    };
+                    old_history[0].content = syspmt_generator('', data.value);
+                    set_chathistory(old_history);
+                }} value={supplement}></Textarea>
                 <Label>Mode</Label>
                 <Select defaultValue='Just one model' onChange={(e,data)=>{set_useasak(data.value === 'asak' ? true : false)}}>
                     <option>Just one model</option>
@@ -469,56 +526,51 @@ TODO - Add something here
                     </div>
                     <div className='config-line' style={{display: asak_recordusefile ? 'grid' : 'none'}}>
                         <Label>Record File:</Label>
-                        <Button appearance='default' onClick={async()=>{
+                        <Button appearance='default' disabled={asak_configvalid ? false : true} onClick={async()=>{
                             //console.log(window.electron_apis);
-                            if(asak_config){
-                                let result = await window.electron_apis.packed_functions.get_record_file();
-                                if(!result.error){
-                                    if(result.content){
-                                        try{
-                                            let record_file = JSON.parse(result.content);
-                                            asak_ai.recorder.add(record_file);
-                                            set_asak_record(asak_ai.recorder.get());
-                                            set_asak_recordfilepath(result.path);
-                                        }catch(e){
-                                            dispatchToast(
-                                                <Toast>
-                                                    <ToastTitle>File Read Error</ToastTitle>
-                                                    <ToastBody><Caption1>Record JSON is not valid or structure is not correct.<br />We will use the last valid json as record.</Caption1></ToastBody>
-                                                </Toast>, { intent: 'error' }
-                                            );
-                                        };
-                                    } else {
+                            let result = await window.electron_apis.packed_functions.get_record_file();
+                            if(!result.error){
+                                if(result.content){
+                                    try{
+                                        let record_file = JSON.parse(result.content);
+                                        asak_ai.recorder.add(record_file);
+                                        set_asak_record(asak_ai.recorder.get());
                                         set_asak_recordfilepath(result.path);
+                                    }catch(e){
                                         dispatchToast(
                                             <Toast>
-                                                <ToastTitle>File is empty</ToastTitle>
-                                                <ToastBody><Caption1>we will rewrite it with the current record.</Caption1></ToastBody>
-                                            </Toast>, { intent: 'ifo' }
+                                                <ToastTitle>File Read Error</ToastTitle>
+                                                <ToastBody><Caption1>Record JSON is not valid or structure is not correct.<br />We will use the last valid json as record.</Caption1></ToastBody>
+                                            </Toast>, { intent: 'error' }
                                         );
-                                        window.electron_apis.fs.writeFile(result.path, JSON.stringify(asak_ai.recorder.get(), null, 4));
                                     };
                                 } else {
+                                    set_asak_recordfilepath(result.path);
                                     dispatchToast(
                                         <Toast>
-                                            <ToastTitle>Error</ToastTitle>
-                                            <ToastBody>{result.error}</ToastBody>
+                                            <ToastTitle>File is empty</ToastTitle>
+                                            <ToastBody><Caption1>we will rewrite it with the current record.</Caption1></ToastBody>
                                         </Toast>, { intent: 'info' }
                                     );
+                                    window.electron_apis.fs.writeFile(result.path, JSON.stringify(asak_ai.recorder.get(), null, 4));
                                 };
                             } else {
                                 dispatchToast(
                                     <Toast>
-                                        <ToastTitle>Set your config first!</ToastTitle>
+                                        <ToastTitle>Error</ToastTitle>
+                                        <ToastBody>{result.error}</ToastBody>
                                     </Toast>, { intent: 'info' }
                                 );
-                                return;
                             };
                         }}>Choose File</Button>
                     </div>
                     <div className='config-line' style={{display: asak_recordusefile ? 'none' : 'grid'}}>
                         <Label>Record JSON:</Label>
-                        <Input appearance='underline' disabled={true} value={JSON.stringify(asak_record)}></Input>
+                        <Input appearance='underline' disabled={true} value={JSON.stringify(asak_record)} contentAfter={
+                            <Button appearance='subtle' icon={<CopyRegular />} onClick={()=>{
+                                navigator.clipboard.writeText(JSON.stringify(asak_record, null, 4));
+                            }} />
+                        }></Input>
                     </div>
                     <div className='config-line'>
                         <Label>Mode:</Label>
@@ -592,6 +644,6 @@ TODO - Add something here
             </div>
         </div>
     );
-}
+};
 
 export default App;
