@@ -24,17 +24,39 @@ import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import asak from 'asakjs';
 import {OpenAI} from 'openai';
 
+
+function apply_to_canvas(content){
+    let final_content = '';
+    let regex = /```([^\n]+)?\n([\s\S]*?)```/g;
+    let last_jsrun = null;
+    let last_js = null;
+    let match;
+    while ((match = regex.exec(content)) !== null) {
+        let lang = match[1] ? match[1].trim() : '';
+        let code = match[2];
+        if (lang === 'js:run') {
+            last_jsrun = code;
+        } else if (lang.toLowerCase() === 'javascript' || lang.toLowerCase() === 'js'){
+            last_js = code;
+        };
+    };
+    final_content = last_jsrun || last_js || '';
+    console.log(final_content);
+    window.electron_apis.ipcRenderer.send('controller2main', final_content);
+};
+
+
 function CodeBlock({ node, inline, className, children, ...props }) {
-    let isBlock = String(children).includes('\n');
+    let isblock = String(children).includes('\n');
     let hasLanguageClass = className?.startsWith('language-');
-    if (isBlock || hasLanguageClass) {
+    if (isblock || hasLanguageClass) {
         let match = /language-([\w:]+)/.exec(className || '');
         let language = match ? match[1] : 'plaintext';
         if (language === 'js:run') {
             language = 'javascript';
         } else if (language === 'plaintext') {
-            let codeContent = String(children).replace(/\n$/, '');
-            let detected = hljs.highlightAuto(codeContent);
+            let code_content = String(children).replace(/\n$/, '');
+            let detected = hljs.highlightAuto(code_content);
             language = detected.language || 'plaintext';
         };
         return (
@@ -214,6 +236,7 @@ To generate high-quality code, you can "conceive first, then code." Before writi
     // 889 tokens for Gemini 2.5 Pro Preview
 };
 
+var is_ipc_reg = false;
 
 function App() {
     const toastId = React.useId('toaster');
@@ -249,15 +272,30 @@ function App() {
             });
         };
     }, [chat_history, scrolling]);
+    const request_ai_ref = React.useRef(request_ai);
+    React.useEffect(() => {;
+        request_ai_ref.current = request_ai;
+    }, [request_ai]);
+    React.useEffect(() => {
+        const get_from_canvas = (event, msg) => {
+            console.log(msg);
+            if(msg){
+                request_ai_ref.current(msg);
+            };
+        };
+        if(!is_ipc_reg){
+            window.electron_apis.ipcRenderer.on('main2controller', get_from_canvas);
+            is_ipc_reg = true;
+        };
+    }, []);
 
     function syspmt_generator(f_lang, f_supplement){
-        //似乎有bug，不知道在哪，更改任意一个值都会触发三次且后面两次不带supplement，但是对程序好像没影响
         let pmt = syspmt[f_lang];
         if(f_supplement){
             if(f_lang === 'en'){
-                pmt += `\nSupplement from user: \n${f_supplement}`;
+                pmt += `\n\n---\n\nSupplement from user: \n${f_supplement}`;
             } else {
-                pmt += `\n用户提供的补充信息: \n${f_supplement}`;
+                pmt += `\n\n---\n\n用户提供的补充信息: \n${f_supplement}`;
             };
         };
         return pmt;
@@ -289,7 +327,7 @@ function App() {
             if(jom_endpoint !== '' && jom_apikey !== '' && jom_model !== ''){
                 set_generating(true);
                 cfg = {
-                    base_url: jom_endpoint + '/chat/',
+                    base_url: jom_endpoint,
                     key: jom_apikey,
                     model: jom_model,
                 };
@@ -313,7 +351,7 @@ function App() {
             let new_msg = {role: 'assistant', content: ''};
             set_chathistory(prev => [...prev, new_msg]);
             try{
-                let res = await openai_cilent.completions.create({
+                let res = await openai_cilent.chat.completions.create({
                     model: cfg.model,
                     messages: new_chathistory,
                     stream: true
@@ -349,11 +387,12 @@ function App() {
                 set_generating(false);
             };
             console.log(new_msg.content);
+            apply_to_canvas(new_msg.content);
         } else {
             let new_msg = {role: 'assistant', content: ''};
             set_chathistory(prev => [...prev, new_msg]);
             try{
-                let res = await openai_cilent.completions.create({
+                let res = await openai_cilent.chat.completions.create({
                     model: cfg.model,
                     messages: new_chathistory,
                     stream: false
@@ -374,6 +413,8 @@ function App() {
                     new_history[last_index] = new_msg;
                     return new_history;
                 });
+                console.log(new_msg.content);
+                apply_to_canvas(new_msg.content);
             }catch(e){
                 dispatchToast(<Toast>
                     <ToastTitle>Error</ToastTitle>
@@ -401,8 +442,9 @@ function App() {
                             set_asak_record({});
                             set_asak_recordfilepath('');
                             set_asak(null);
-                            set_chathistory([{role: 'system', content: syspmt_generator('', supplement)}]);
+                            set_chathistory([{role: 'system', content: syspmt_generator(pmtlang, supplement)}]);
                             set_generating(false);
+                            window.electron_apis.ipcRenderer.send('reset');
                         }} />
                     </Tooltip>
                     <Dialog>
@@ -443,13 +485,16 @@ TODO - Add something here
                 {/* model basic settings */}
                 <Label>System prompt language:</Label>
                 <RadioGroup layout="horizontal" defaultValue='en' onChange={(e,data)=>{
-                    set_pmtlang(data.value);
-                    let old_history = JSON.parse(JSON.stringify(chat_history));
-                    if(old_history.length === 0){
-                        old_history.push({role: 'system', content: ''});
-                    };
-                    old_history[0].content = syspmt_generator(data.value, supplement);
-                    set_chathistory(old_history);
+                    let new_lang = data.value;
+                    set_pmtlang(new_lang);
+                    set_chathistory(prev => {
+                        let new_history = [...prev];
+                        if (new_history.length === 0 || new_history[0].role !== 'system') {
+                            return [{ role: 'system', content: syspmt_generator(new_lang, supplement) }];
+                        };
+                        new_history[0].content = syspmt_generator(new_lang, supplement);
+                        return new_history;
+                    });
                 }}>
                     <Radio label='English' value='en'></Radio>
                     <Radio label='Chinese' value='zh'></Radio>
@@ -460,13 +505,16 @@ TODO - Add something here
                 </div>
                 <Label>Supplementary information for AI:</Label>
                 <Textarea resize="vertical" size="small" placeholder='You can add any additional information here, such as api key, cdn, lib, style, etc.' onChange={(e,data)=>{
-                    set_supplement(data.value);
-                    let old_history = JSON.parse(JSON.stringify(chat_history));
-                    if(old_history.length === 0){
-                        old_history.push({role: 'system', content: ''});
-                    };
-                    old_history[0].content = syspmt_generator(pmtlang, data.value);
-                    set_chathistory(old_history);
+                    let new_supplement = data.value;
+                    set_supplement(new_supplement);
+                    set_chathistory(prev => {
+                        let new_history = [...prev];
+                        if (new_history.length === 0 || new_history[0].role !== 'system') {
+                            return [{ role: 'system', content: syspmt_generator(pmtlang, new_supplement) }];
+                        };
+                        new_history[0].content = syspmt_generator(pmtlang, new_supplement);
+                        return new_history;
+                    });
                 }}></Textarea>
                 <Label>Mode</Label>
                 <Select defaultValue='Just one model' onChange={(e,data)=>{set_useasak(data.value === 'asak' ? true : false)}}>

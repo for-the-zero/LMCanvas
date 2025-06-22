@@ -10,7 +10,25 @@
         "dev:electron": "wait-on tcp:5173 && electron .",
         "dev": "concurrently -k \"npm run dev:vite\" \"npm run dev:electron\"",
         "build": "vite build && electron-builder",
+        "build:vite": "vite build",
+        "build:electron": "electron-builder",
         "start": "electron ."
+    },
+    "build": {
+        "appId": "com.example.lmcanvas",
+        "productName": "LMCanvas",
+        "directories": {
+            "output": "release"
+        },
+        "files": [
+            "main.js",
+            "renderer/**/*",
+            "dist/**/*"
+        ],
+        "win": {
+            "target": "nsis",
+            "icon": "icon.png"
+        }
     },
     "dependencies": {
         "@fluentui/react-components": "^9.64.0",

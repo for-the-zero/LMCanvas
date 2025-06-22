@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8" />
+        <title>Canvas</title>
+
+        <script>
+            // 名字写复杂一点免得被撞上
+            function internalusefunction_overlay_open(){
+                let overlay = document.createElement('div');
+                overlay.className = 'internaluseclass_overlay';
+                overlay.style.position = 'fixed';
+                overlay.style.top = '0';
+                overlay.style.left = '0';
+                overlay.style.width = '100%';
+                overlay.style.height = '100%';
+                overlay.style.backgroundColor = 'rgba(0,0,0,0.5)';
+                overlay.style.zIndex = '1145141919810';
+                overlay.style.pointerEvents = 'none';
+                overlay.style.cursor = 'progress';
+                document.body.appendChild(overlay);
+            };
+            function internalusefunction_overlay_close(){
+                let overlay = document.querySelector('.internaluseclass_overlay');
+                if(overlay){
+                    overlay.remove();
+                };
+            };
+            function send2ai(msg){
+                console.log(msg);
+                //console.trace();只触发了一次
+                window.electronAPI.ipcRenderer.send('canvas2main', msg);
+                internalusefunction_overlay_open();
+            };
+
+            window.electronAPI.ipcRenderer.on('main2canvas', (event, msg)=>{
+                internalusefunction_overlay_close();
+                let code = msg;
+                try{
+                    eval(code);
+                }catch(e){
+                    let err_msg = 'Exception occurred while executing code\n';
+                    err_msg += e.message + '\n';
+                    console.error(err_msg);
+                    send2ai(err_msg);
+                };
+            });
+        </script>
+
+    </head>
+    <body></body>
+</html>

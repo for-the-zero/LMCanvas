@@ -30,12 +30,13 @@ ipcMain.handle('get_record_file', async (e) => {
 });
 
 function main() {
+    // win_controller
     const win_controller = new BrowserWindow({
         width: 900,
         height: 500,
-        center: true,
         autoHideMenuBar: true,
         show: false,
+        icon: join(__dirname, 'build', 'icon.png'),
         webPreferences: {
             nodeIntegration: true,
             contextIsolation: true,
@@ -48,10 +49,46 @@ function main() {
         win_controller.loadURL('http://localhost:5173/renderer/controller.html');
         win_controller.webContents.openDevTools();
     } else {
-        win_controller.loadFile(join(__dirname, 'build', 'renderer', 'index.html'));
+        win_controller.loadFile(join(__dirname, 'build', 'renderer', 'controller.html'));
     };
     win_controller.once('ready-to-show', () => {
         win_controller.show();
+    });
+
+    // win_canvas
+    const win_canvas = new BrowserWindow({
+        width: 900,
+        height: 500,
+        autoHideMenuBar: true,
+        show: false,
+        icon: join(__dirname, 'build', 'icon.png'),
+        webPreferences: {
+            nodeIntegration: true,
+            contextIsolation: true,
+            webSecurity: false,
+            preload: join(__dirname, 'renderer', 'canvas_preload.cjs')
+        }
+    });
+    win_canvas.setMenu(null);
+    if(is_dev){
+        win_canvas.loadURL('http://localhost:5173/renderer/canvas.html');
+        win_canvas.webContents.openDevTools();
+    } else {
+        win_canvas.loadFile(join(__dirname, 'build', 'renderer', 'canvas.html'));
+    };
+    win_canvas.once('ready-to-show', () => {
+        win_canvas.show();
+    });
+
+    // ipc
+    ipcMain.on('controller2main', (e, msg) => {
+        win_canvas.webContents.send('main2canvas', msg);
+    });
+    ipcMain.on('canvas2main', (e, msg) => {
+        win_controller.webContents.send('main2controller', msg);
+    });
+    ipcMain.on('reset', (e) => {
+        win_canvas.webContents.reload();
     });
 };
 
