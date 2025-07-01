@@ -1,3 +1,5 @@
 node_modules
 asak_config.json
 asak_record.json
+dist
+builds

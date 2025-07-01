@@ -3,7 +3,7 @@ import './controller.css';
 
 // components
 import { 
-    Button, Select, Label, Input, Radio, RadioGroup, Switch, InfoLabel, Textarea,
+    Button, Dropdown, Option, Label, Input, Radio, RadioGroup, Switch, InfoLabel, Textarea,
     Title1, Tooltip, Text , Divider, Link,
     Card, CardHeader, CardPreview,
     Body1, Body1Strong, Caption1, Caption1Strong,
@@ -470,11 +470,17 @@ function App() {
                                 </DialogTitle>
                                 <DialogContent>
                                     <MsgMD>{`
-Go to see my [Github repo](https://github.com/for-the-zero/LMcanvas)
+**Links**:
 
-UI: [Fluent UI React Components](https://react.fluentui.dev/)
+> [Github Link(more details here)](https://github.com/for-the-zero/LMcanvas)
+> 
+> [Where can we find free LLM apis](https://github.com/for-the-zero/Free-LLM-Collection)
+> 
+> What is [asak](https://github.com/for-the-zero/asak)?
+> 
+> UI: [Fluent UI React Components](https://react.fluentui.dev/)
 
-TODO - Add something here 
+TODO - add contents here
                                     `}</MsgMD>
                                 </DialogContent>
                             </DialogBody>
@@ -517,10 +523,10 @@ TODO - Add something here
                     });
                 }}></Textarea>
                 <Label>Mode</Label>
-                <Select defaultValue='Just one model' onChange={(e,data)=>{set_useasak(data.value === 'asak' ? true : false)}}>
-                    <option>Just one model</option>
-                    <option>asak</option>
-                </Select>
+                <Dropdown defaultValue='Just one model' onActiveOptionChange={(e,data)=>{set_useasak(data.nextOption.value === 'asak' ? true : false)}}>
+                    <Option>Just one model</Option>
+                    <Option>asak</Option>
+                </Dropdown>
 
                 {/* jom settings */}
                 <div className='jom-configs' style={{display: useasak? 'none' : 'block'}}>
@@ -666,13 +672,13 @@ TODO - Add something here
                     </div>
                     <div className='config-line'>
                         <Label>Mode:</Label>
-                        <Select defaultValue='index' onChange={(e,data)=>{
-                            set_asak_mode(data.value);
+                        <Dropdown defaultValue='index' onActiveOptionChange={(e,data)=>{
+                            set_asak_mode(data.nextOption.value);
                         }}>
-                            <option>index</option>
-                            <option>available</option>
-                            <option>random</option>
-                        </Select>
+                            <Option>index</Option>
+                            <Option>available</Option>
+                            <Option>random</Option>
+                        </Dropdown>
                     </div>
                 </div>
                 <Toaster toasterId={toastId} />
