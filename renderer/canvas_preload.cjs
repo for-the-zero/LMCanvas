@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer, shell } = require('electron');
+const { contextBridge, ipcRenderer, shell, clipboard, net } = require('electron');
 const fs = require('fs').promises;
 const path = require('path');
 
@@ -18,12 +18,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
         extname: (p) => path.extname(p),
     },
     clipboard: {
-        readText: () => ipcRenderer.invoke('clipboard:readText'),
-        writeText: (text) => ipcRenderer.invoke('clipboard:writeText', text),
+        readText: (...args) => clipboard.readText(...args),
+        writeText: (...args) => clipboard.writeText(...args),
     },
-    fetch: (url, options) => ipcRenderer.invoke('proxy-fetch', { url, options }),
+    fetch: (...args) => net.fetch(...args),
     shell: {
-        openExternal: (url) => ipcRenderer.send('shell:openExternal', url),
+        openExternal: (...args) => shell.openExternal(...args),
+        showItemInFolder: (...args) => shell.showItemInFolder(...args),
+        openPath: (...args) => shell.openPath(...args),
     },
     ipcRenderer: {
         send: (channel, ...args) => ipcRenderer.send(channel, ...args),
